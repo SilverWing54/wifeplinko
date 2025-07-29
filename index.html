@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wife Plinko</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1a1a1a;
+            font-family: Arial, sans-serif;
+            display: flex;
+            min-height: 100vh;
+            color: white;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            color: #ffffff;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        #gameCanvas {
+            background: #2a2a2a;
+            max-width: 100%;
+            max-height: 80vh;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+        }
+
+        .game-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+        }
+
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        #dropBall {
+            padding: 10px 20px;
+            font-size: 14px;
+            background: #1fa71a;
+            color: black;
+            font-weight: bold;
+            border: 1px solid #1fa71a;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        #dropBall:hover {
+            background: #25e91e;
+            border: 1px solid #25e91e;
+        }
+
+        .score {
+            color: #ccc;
+            font-size: 16px;
+            text-align: center;
+        }
+
+        .basket-label {
+            position: absolute;
+            color: white;
+            font-size: 12px;
+            text-align: center;
+            pointer-events: auto;
+            transition: transform 0.2s ease;
+            padding: 2px 5px;
+            border-radius: 3px;
+            cursor: pointer;
+            user-select: none;
+            transform: translateX(-50%);
+        }
+
+        .basket-label:hover {
+            background: rgba(100, 100, 100, 0.7);
+        }
+
+        .basket-label.editing {
+            background: rgba(100, 100, 100, 0.9);
+        }
+
+        .basket-label input {
+            width: 60px;
+            background: transparent;
+            border: 1px solid white;
+            color: white;
+            text-align: center;
+            font-size: inherit;
+            padding: 0;
+            margin: 0;
+        }
+
+        .basket-stat {
+            visibility: hidden;
+            margin-right: 20px;
+        }
+
+        .basket-stats {
+            display: flex;
+            flex-wrap: nowrap;
+        }
+
+        .basket-count {
+            font-weight: bold;
+            color: white;
+        }
+
+        .results-feed {
+            width: 250px;
+            margin-left: 20px;
+            background: #2a2a2a;
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            overflow-y: auto;
+            max-height: 70vh;
+        }
+
+        .results-feed h2 {
+            color: #ffffff;
+            font-size: 18px;
+            margin-top: 0;
+            text-align: center;
+            border-bottom: 1px solid #444;
+            padding-bottom: 10px;
+        }
+
+        .result-item {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .result-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+
+        .result-info {
+            flex: 1;
+        }
+
+        .result-name {
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .result-time {
+            font-size: 10px;
+            color: #aaa;
+            margin-top: 3px;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .clear-results {
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        #clearResults {
+            padding: 8px 15px;
+            font-size: 12px;
+            background: #555;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        #clearResults:hover {
+            background: #777;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="main-content">
+        <h1>Wife Plinko</h1>
+        <div class="game-container">
+            <canvas id="gameCanvas" width="800" height="600"></canvas>
+            <div id="basket-labels"></div>
+        </div>
+
+        <div class="controls">
+            <button id="dropBall">Drop Ball</button>
+        </div>
+
+        <div class="score">
+            <br>
+            Balls Dropped:
+            <span id="ballCount">0</span>
+            <br><br>
+            <input type="checkbox" id="advanced">Statistics</input>
+        </div>
+
+        <div class="basket-stats">
+            <div class="basket-stat">$100<br><span class="basket-count" id="count-0">0</span></div>
+            <div class="basket-stat">$50<br><span class="basket-count" id="count-1">0</span></div>
+            <div class="basket-stat">$20<br><span class="basket-count" id="count-2">0</span></div>
+            <div class="basket-stat">$10<br><span class="basket-count" id="count-3">0</span></div>
+            <div class="basket-stat">$0<br><span class="basket-count" id="count-4">0</span></div>
+            <div class="basket-stat">$10<br><span class="basket-count" id="count-5">0</span></div>
+            <div class="basket-stat">$20<br><span class="basket-count" id="count-6">0</span></div>
+            <div class="basket-stat">$50<br><span class="basket-count" id="count-7">0</span></div>
+            <div class="basket-stat">$100<br><span class="basket-count" id="count-8">0</span></div>
+        </div>
+    </div>
+
+    <div class="results-feed">
+        <div id="resultsContainer"></div>
+        <div class="clear-results">
+            <button id="clearResults">Clear</button>
+        </div>
+    </div>
+
+    <script>
+        const Engine = Matter.Engine;
+        const Render = Matter.Render;
+        const World = Matter.World;
+        const Bodies = Matter.Bodies;
+        const Events = Matter.Events;
+
+        const engine = Engine.create();
+        const world = engine.world;
+
+        const canvas = document.getElementById('gameCanvas');
+        const render = Render.create({
+            canvas: canvas,
+            engine: engine,
+            options: {
+                width: 800,
+                height: 600,
+                wireframes: false,
+                background: 'transparent',
+                showAngleIndicator: false,
+                showVelocity: false
+            }
+        });
+
+        let ballCount = 0;
+        const ballCountElement = document.getElementById('ballCount');
+        const basketCounts = new Array(9).fill(0);
+
+        const resultsContainer = document.getElementById('resultsContainer');
+        const maxResults = 10;
+        const results = [];
+
+        let scale = 1;
+        let basketSpacing;
+
+        const basketColors = [
+            '#188c2b', '#2db258', '#42d98a', '#57ffc1', '#a8ffdb',
+            '#57ffc1', '#42d98a', '#2db258', '#188c2b'
+        ];
+
+        const defaultLabels = ['$100', '$50', '$20', '$10', '$0', '$10', '$20', '$50', '$100'];
+
+        function updateScale() {
+            const container = document.querySelector('.game-container');
+            const containerWidth = container.clientWidth;
+            scale = Math.min(1, containerWidth / 800);
+
+            canvas.style.width = (800 * scale) + 'px';
+            canvas.style.height = (600 * scale) + 'px';
+
+            basketLabels.forEach((label, i) => {
+                const x = (basketSpacing * i + basketSpacing / 2) * scale;
+                const y = 600 * scale;
+                label.style.left = `${x + 40}px`;
+                label.style.top = `${y - 30}px`;
+                label.style.fontSize = `${12 * scale}px`;
+                label.style.fontWeight = 'bold';
+                label.style.color = 'black';
+
+                const input = label.querySelector('input');
+                if (input) {
+                    input.style.fontSize = `${18 * scale}px`;
+                }
+            });
+        }
+
+        const walls = [
+            Bodies.rectangle(20, 300, 10, 600, {
+                isStatic: true,
+                render: { visible: false }
+            }),
+            Bodies.rectangle(780, 300, 10, 600, {
+                isStatic: true,
+                render: { visible: false }
+            })
+        ];
+
+        const pegs = [];
+        const pegRadius = 9;
+        const rows = 8;
+        const startY = 60;
+        const rowSpacing = 70;
+
+        for (let row = 0; row < rows; row++) {
+            const pegsInRow = row + 3;
+            const startX = 400 - (pegsInRow - 1) * 40;
+
+            for (let col = 0; col < pegsInRow; col++) {
+                const x = startX + col * 80;
+                const y = startY + row * rowSpacing;
+
+                const peg = Bodies.circle(x, y, pegRadius, {
+                    isStatic: true,
+                    render: {
+                        fillStyle: '#ffffff'
+                    },
+                    restitution: 0.1
+                });
+                pegs.push(peg);
+            }
+        }
+
+        const baskets = [];
+        const basketLabels = [];
+        const basketWidth = 70;
+        const numBaskets = 9;
+        basketSpacing = 720 / numBaskets;
+
+        for (let i = 0; i < numBaskets; i++) {
+            const x = basketSpacing * i + basketSpacing / 2;
+            const y = 580;
+
+            const basket = Bodies.rectangle(x + 40, y, basketWidth, 20, {
+                isStatic: true,
+                isSensor: true,
+                render: {
+                    fillStyle: basketColors[i],
+                    strokeStyle: 'transparent',
+                    lineWidth: 0
+                },
+                chamfer: { radius: 6 },
+                basketIndex: i
+            });
+
+            baskets.push(basket);
+
+            const labelContainer = document.createElement('div');
+            labelContainer.className = 'basket-label';
+            labelContainer.textContent = defaultLabels[i];
+            labelContainer.style.left = `${x}px`;
+            labelContainer.style.top = `${y - 30}px`;
+
+            labelContainer.addEventListener('click', function (e) {
+                e.stopPropagation();
+
+                if (this.classList.contains('editing')) {
+                    return;
+                }
+
+                document.querySelectorAll('.basket-label.editing').forEach(el => {
+                    finalizeEdit(el);
+                });
+
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = this.textContent;
+                input.style.width = '60px';
+                input.style.background = 'transparent';
+                input.style.border = '1px solid white';
+                input.style.color = 'white';
+                input.style.textAlign = 'center';
+
+                this.textContent = '';
+                this.appendChild(input);
+                this.classList.add('editing');
+
+                input.focus();
+                input.select();
+
+                const handleBlur = () => {
+                    finalizeEdit(this);
+                    document.removeEventListener('click', handleOutsideClick);
+                };
+
+                const handleOutsideClick = (e) => {
+                    if (!this.contains(e.target)) {
+                        handleBlur();
+                    }
+                };
+
+                const handleKeyDown = (e) => {
+                    if (e.key === 'Enter') {
+                        finalizeEdit(this);
+                        document.removeEventListener('click', handleOutsideClick);
+                    }
+                };
+
+                input.addEventListener('blur', handleBlur);
+                input.addEventListener('keydown', handleKeyDown);
+                document.addEventListener('click', handleOutsideClick);
+            });
+
+            document.getElementById('basket-labels').appendChild(labelContainer);
+            basketLabels.push(labelContainer);
+        }
+
+        function finalizeEdit(label) {
+            const input = label.querySelector('input');
+            if (input) {
+                const newText = input.value.trim();
+                const labelIndex = Array.from(basketLabels).indexOf(label);
+                label.textContent = newText || defaultLabels[labelIndex];
+                label.classList.remove('editing');
+
+                const counterLabel = document.getElementById(`count-${labelIndex}`).parentElement;
+                counterLabel.innerHTML = `${newText || defaultLabels[labelIndex]}<br><span class="basket-count" id="count-${labelIndex}">${basketCounts[labelIndex]}</span>`;
+            }
+        }
+
+        const balls = [];
+
+        World.add(world, [...walls, ...pegs, ...baskets]);
+
+        function createBall() {
+            const ball = Bodies.circle(
+                350 + Math.random() * 100,
+                30,
+                15,
+                {
+                    restitution: 0.45,
+                    friction: 0.002,
+                    frictionAir: 0.02,
+                    render: {
+                        fillStyle: '#04471C'
+                    },
+                    collisionFilter: {
+                        group: -1
+                    }
+                }
+            );
+
+            balls.push(ball);
+            World.add(world, ball);
+            ballCount++;
+            ballCountElement.textContent = ballCount;
+        }
+
+        function clearResults() {
+            resultsContainer.innerHTML = '';
+            results.length = 0;
+        }
+
+        function addResult(basketIndex) {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString();
+            const basketName = basketLabels[basketIndex].textContent || defaultLabels[basketIndex];
+
+            const result = {
+                basketIndex,
+                basketName,
+                time: timeString,
+                color: basketColors[basketIndex]
+            };
+
+            results.unshift(result);
+
+            if (results.length > maxResults) {
+                results.pop();
+            }
+
+            updateResultsFeed();
+        }
+
+        function updateResultsFeed() {
+            resultsContainer.innerHTML = '';
+
+            results.forEach(result => {
+                const resultElement = document.createElement('div');
+                resultElement.className = 'result-item';
+
+                resultElement.innerHTML = `
+                    <div class="result-color" style="background-color: ${result.color}"></div>
+                    <div class="result-info">
+                        <div class="result-name">${result.basketName}</div>
+                        <div class="result-time">${result.time}</div>
+                    </div>
+                `;
+
+                resultsContainer.appendChild(resultElement);
+            });
+        }
+
+        function animateBasket(basketIndex) {
+            const label = basketLabels[basketIndex];
+            label.style.transform = 'translateX(-50%) scale(1.3) translateY(-5px)';
+            setTimeout(() => {
+                label.style.transform = 'translateX(-50%) scale(1) translateY(0)';
+            }, 200);
+
+            basketCounts[basketIndex]++;
+            document.getElementById(`count-${basketIndex}`).textContent = basketCounts[basketIndex];
+
+            addResult(basketIndex);
+        }
+
+        Events.on(engine, 'collisionStart', (event) => {
+            event.pairs.forEach(pair => {
+                const { bodyA, bodyB } = pair;
+
+                let ball = null;
+                let basket = null;
+
+                if (balls.includes(bodyA) && baskets.includes(bodyB)) {
+                    ball = bodyA;
+                    basket = bodyB;
+                } else if (balls.includes(bodyB) && baskets.includes(bodyA)) {
+                    ball = bodyB;
+                    basket = bodyA;
+                }
+
+                if (ball && basket) {
+                    animateBasket(basket.basketIndex);
+
+                    World.remove(world, ball);
+                    const ballIndex = balls.indexOf(ball);
+                    if (ballIndex > -1) {
+                        balls.splice(ballIndex, 1);
+                    }
+                }
+            });
+        });
+
+        document.getElementById('dropBall').addEventListener('click', createBall);
+        document.getElementById('clearResults').addEventListener('click', clearResults);
+        document.getElementById('advanced').addEventListener('change', (e) => {
+            const stats = document.querySelectorAll('.basket-stat');
+            stats.forEach((stat, index) => {
+                stat.style.visibility = e.target.checked ? 'visible' : 'hidden';
+            });
+        });
+
+        window.addEventListener('resize', updateScale);
+
+        updateScale();
+
+        Matter.Runner.run(engine);
+        Matter.Render.run(render);
+    </script>
+</body>
+
+</html>
