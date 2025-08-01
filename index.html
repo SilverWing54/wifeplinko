@@ -258,6 +258,19 @@
         #clearResults:hover {
             background: #777;
         }
+
+        .sound-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        .sound-controls label {
+            font-size: 14px;
+        }
     </style>
 </head>
 
@@ -277,6 +290,11 @@
                     <span id="ballCountDisplay">1</span>
                 </div>
                 <button id="dropBall">Drop Ball(s)</button>
+            </div>
+            
+            <div class="sound-controls">
+                <label for="soundToggle">Sound:</label>
+                <input type="checkbox" id="soundToggle" checked>
             </div>
             
             <div class="current-batch hidden" id="currentBatch">
@@ -323,6 +341,46 @@
 
         const engine = Engine.create();
         const world = engine.world;
+
+        // Sound management
+        const sounds = {
+            click: null,
+            score: null
+        };
+
+        let soundEnabled = true;
+
+        // Initialize sounds
+        function initSounds() {
+            try {
+                sounds.click = new Audio('click.wav');
+                sounds.score = new Audio('score.wav');
+                
+                // Set volume and preload
+                sounds.click.volume = 0.5;
+                sounds.score.volume = 0.7;
+                sounds.click.preload = 'auto';
+                sounds.score.preload = 'auto';
+                
+                // Handle loading errors gracefully
+                sounds.click.onerror = () => console.warn('Could not load click.wav');
+                sounds.score.onerror = () => console.warn('Could not load score.wav');
+            } catch (error) {
+                console.warn('Audio initialization failed:', error);
+            }
+        }
+
+        function playSound(soundName) {
+            if (!soundEnabled || !sounds[soundName]) return;
+            
+            try {
+                const sound = sounds[soundName];
+                sound.currentTime = 0; // Reset to beginning
+                sound.play().catch(e => console.warn(`Could not play ${soundName}:`, e));
+            } catch (error) {
+                console.warn(`Error playing ${soundName}:`, error);
+            }
+        }
 
         const canvas = document.getElementById('gameCanvas');
         const render = Render.create({
@@ -414,7 +472,8 @@
                     render: {
                         fillStyle: '#ffffff'
                     },
-                    restitution: 0.1
+                    restitution: 0.1,
+                    isPeg: true
                 });
                 pegs.push(peg);
             }
@@ -542,7 +601,8 @@
                     collisionFilter: {
                         group: -1
                     },
-                    batchId: batchId
+                    batchId: batchId,
+                    isBall: true
                 }
             );
 
@@ -696,7 +756,25 @@
             event.pairs.forEach(pair => {
                 const { bodyA, bodyB } = pair;
 
+                // Check for ball hitting peg
                 let ball = null;
+                let peg = null;
+                
+                if (bodyA.isBall && bodyB.isPeg) {
+                    ball = bodyA;
+                    peg = bodyB;
+                } else if (bodyB.isBall && bodyA.isPeg) {
+                    ball = bodyB;
+                    peg = bodyA;
+                }
+
+                if (ball && peg) {
+                    // Play click sound when ball hits peg
+                    playSound('click');
+                }
+
+                // Check for ball hitting basket
+                ball = null;
                 let basket = null;
 
                 if (balls.includes(bodyA) && baskets.includes(bodyB)) {
@@ -710,6 +788,9 @@
                 if (ball && basket) {
                     animateBasket(basket.basketIndex);
                     addResult(basket.basketIndex, ball);
+
+                    // Play score sound when ball hits basket
+                    playSound('score');
 
                     World.remove(world, ball);
                     const ballIndex = balls.indexOf(ball);
@@ -742,8 +823,14 @@
             });
         });
 
+        document.getElementById('soundToggle').addEventListener('change', (e) => {
+            soundEnabled = e.target.checked;
+        });
+
         window.addEventListener('resize', updateScale);
 
+        // Initialize everything
+        initSounds();
         updateScale();
 
         Matter.Runner.run(engine);
