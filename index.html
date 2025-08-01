@@ -49,6 +49,8 @@
             display: flex;
             gap: 15px;
             align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
         }
 
         #dropBall {
@@ -66,6 +68,46 @@
         #dropBall:hover {
             background: #25e91e;
             border: 1px solid #25e91e;
+        }
+
+        #dropBall:disabled {
+            background: #555;
+            border: 1px solid #555;
+            color: #888;
+            cursor: not-allowed;
+        }
+
+        .ball-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        .ball-slider {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #ballCountSlider {
+            width: 100px;
+            accent-color: #1fa71a;
+        }
+
+        .current-batch {
+            background: rgba(0, 100, 200, 0.2);
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+            min-width: 120px;
+            border: 1px solid rgba(0, 100, 200, 0.5);
+        }
+
+        .current-batch.hidden {
+            opacity: 0.3;
         }
 
         .score {
@@ -152,6 +194,11 @@
             animation: fadeIn 0.3s ease;
         }
 
+        .result-item.batch {
+            background: rgba(0, 100, 200, 0.2);
+            border: 1px solid rgba(0, 100, 200, 0.4);
+        }
+
         .result-color {
             width: 20px;
             height: 20px;
@@ -166,6 +213,12 @@
         .result-name {
             font-weight: bold;
             font-size: 14px;
+        }
+
+        .result-batch-info {
+            font-size: 12px;
+            color: #aaa;
+            margin-top: 2px;
         }
 
         .result-time {
@@ -217,7 +270,20 @@
         </div>
 
         <div class="controls">
-            <button id="dropBall">Drop Ball</button>
+            <div class="ball-controls">
+                <div class="ball-slider">
+                    <label for="ballCountSlider">Balls:</label>
+                    <input type="range" id="ballCountSlider" min="1" max="50" value="1">
+                    <span id="ballCountDisplay">1</span>
+                </div>
+                <button id="dropBall">Drop Ball(s)</button>
+            </div>
+            
+            <div class="current-batch hidden" id="currentBatch">
+                <div>Current Batch</div>
+                <div>Total: <span id="batchTotal">$0</span></div>
+                <div><span id="batchProgress">0/0</span> balls</div>
+            </div>
         </div>
 
         <div class="score">
@@ -229,15 +295,15 @@
         </div>
 
         <div class="basket-stats">
-            <div class="basket-stat">$100<br><span class="basket-count" id="count-0">0</span></div>
-            <div class="basket-stat">$50<br><span class="basket-count" id="count-1">0</span></div>
-            <div class="basket-stat">$20<br><span class="basket-count" id="count-2">0</span></div>
-            <div class="basket-stat">$10<br><span class="basket-count" id="count-3">0</span></div>
+            <div class="basket-stat">$10<br><span class="basket-count" id="count-0">0</span></div>
+            <div class="basket-stat">$5<br><span class="basket-count" id="count-1">0</span></div>
+            <div class="basket-stat">$2<br><span class="basket-count" id="count-2">0</span></div>
+            <div class="basket-stat">$1<br><span class="basket-count" id="count-3">0</span></div>
             <div class="basket-stat">$0<br><span class="basket-count" id="count-4">0</span></div>
-            <div class="basket-stat">$10<br><span class="basket-count" id="count-5">0</span></div>
-            <div class="basket-stat">$20<br><span class="basket-count" id="count-6">0</span></div>
-            <div class="basket-stat">$50<br><span class="basket-count" id="count-7">0</span></div>
-            <div class="basket-stat">$100<br><span class="basket-count" id="count-8">0</span></div>
+            <div class="basket-stat">$1<br><span class="basket-count" id="count-5">0</span></div>
+            <div class="basket-stat">$2<br><span class="basket-count" id="count-6">0</span></div>
+            <div class="basket-stat">$5<br><span class="basket-count" id="count-7">0</span></div>
+            <div class="basket-stat">$10<br><span class="basket-count" id="count-8">0</span></div>
         </div>
     </div>
 
@@ -277,8 +343,11 @@
         const basketCounts = new Array(9).fill(0);
 
         const resultsContainer = document.getElementById('resultsContainer');
-        const maxResults = 10;
+        const maxResults = 15;
         const results = [];
+
+        let currentBatch = null;
+        let activeBalls = new Set();
 
         let scale = 1;
         let basketSpacing;
@@ -288,7 +357,8 @@
             '#57ffc1', '#42d98a', '#2db258', '#188c2b'
         ];
 
-        const defaultLabels = ['$100', '$50', '$20', '$10', '$0', '$10', '$20', '$50', '$100'];
+        const defaultLabels = ['$10', '$5', '$2', '$1', '$0', '$1', '$2', '$5', '$10'];
+        const defaultValues = [10, 5, 2, 1, 0, 1, 2, 5, 10];
 
         function updateScale() {
             const container = document.querySelector('.game-container');
@@ -451,7 +521,13 @@
 
         World.add(world, [...walls, ...pegs, ...baskets]);
 
-        function createBall() {
+        function getBasketValue(basketIndex) {
+            const label = basketLabels[basketIndex].textContent;
+            const match = label.match(/\$?(-?\d+)/);
+            return match ? parseInt(match[1]) : defaultValues[basketIndex];
+        }
+
+        function createBall(batchId = null) {
             const ball = Bodies.circle(
                 350 + Math.random() * 100,
                 30,
@@ -465,14 +541,74 @@
                     },
                     collisionFilter: {
                         group: -1
-                    }
+                    },
+                    batchId: batchId
                 }
             );
 
             balls.push(ball);
+            if (batchId) {
+                activeBalls.add(ball);
+            }
             World.add(world, ball);
             ballCount++;
             ballCountElement.textContent = ballCount;
+        }
+
+        function createBatch(numBalls) {
+            const batchId = Date.now();
+            currentBatch = {
+                id: batchId,
+                total: 0,
+                ballsDropped: numBalls,
+                ballsCompleted: 0,
+                startTime: new Date()
+            };
+
+            const batchDisplay = document.getElementById('currentBatch');
+            batchDisplay.classList.remove('hidden');
+            updateBatchDisplay();
+
+            document.getElementById('dropBall').disabled = true;
+
+            for (let i = 0; i < numBalls; i++) {
+                setTimeout(() => {
+                    createBall(batchId);
+                }, i * 100);
+            }
+        }
+
+        function updateBatchDisplay() {
+            if (!currentBatch) return;
+
+            document.getElementById('batchTotal').textContent = `$${currentBatch.total}`;
+            document.getElementById('batchProgress').textContent = `${currentBatch.ballsCompleted}/${currentBatch.ballsDropped}`;
+        }
+
+        function completeBatch() {
+            if (!currentBatch) return;
+
+            const batchResult = {
+                isBatch: true,
+                total: currentBatch.total,
+                ballCount: currentBatch.ballsDropped,
+                time: currentBatch.startTime.toLocaleTimeString(),
+                color: '#0066cc'
+            };
+
+            results.unshift(batchResult);
+
+            if (results.length > maxResults) {
+                results.pop();
+            }
+
+            updateResultsFeed();
+
+            document.getElementById('currentBatch').classList.add('hidden');
+            document.getElementById('dropBall').disabled = false;
+
+            currentBatch = null;
+            activeBalls.clear();
         }
 
         function clearResults() {
@@ -480,25 +616,39 @@
             results.length = 0;
         }
 
-        function addResult(basketIndex) {
+        function addResult(basketIndex, ball) {
             const now = new Date();
             const timeString = now.toLocaleTimeString();
             const basketName = basketLabels[basketIndex].textContent || defaultLabels[basketIndex];
+            const basketValue = getBasketValue(basketIndex);
 
-            const result = {
-                basketIndex,
-                basketName,
-                time: timeString,
-                color: basketColors[basketIndex]
-            };
+            if (ball.batchId && currentBatch && ball.batchId === currentBatch.id) {
+                currentBatch.total += basketValue;
+                currentBatch.ballsCompleted++;
+                activeBalls.delete(ball);
+                updateBatchDisplay();
 
-            results.unshift(result);
+                if (currentBatch.ballsCompleted >= currentBatch.ballsDropped) {
+                    completeBatch();
+                }
+            } else if (!ball.batchId) {
+                const result = {
+                    basketIndex,
+                    basketName,
+                    basketValue,
+                    time: timeString,
+                    color: basketColors[basketIndex],
+                    isBatch: false
+                };
 
-            if (results.length > maxResults) {
-                results.pop();
+                results.unshift(result);
+
+                if (results.length > maxResults) {
+                    results.pop();
+                }
+
+                updateResultsFeed();
             }
-
-            updateResultsFeed();
         }
 
         function updateResultsFeed() {
@@ -506,15 +656,26 @@
 
             results.forEach(result => {
                 const resultElement = document.createElement('div');
-                resultElement.className = 'result-item';
+                resultElement.className = result.isBatch ? 'result-item batch' : 'result-item';
 
-                resultElement.innerHTML = `
-                    <div class="result-color" style="background-color: ${result.color}"></div>
-                    <div class="result-info">
-                        <div class="result-name">${result.basketName}</div>
-                        <div class="result-time">${result.time}</div>
-                    </div>
-                `;
+                if (result.isBatch) {
+                    resultElement.innerHTML = `
+                        <div class="result-color" style="background-color: ${result.color}"></div>
+                        <div class="result-info">
+                            <div class="result-name">Batch Total: $${result.total}</div>
+                            <div class="result-batch-info">${result.ballCount} balls</div>
+                            <div class="result-time">${result.time}</div>
+                        </div>
+                    `;
+                } else {
+                    resultElement.innerHTML = `
+                        <div class="result-color" style="background-color: ${result.color}"></div>
+                        <div class="result-info">
+                            <div class="result-name">${result.basketName}</div>
+                            <div class="result-time">${result.time}</div>
+                        </div>
+                    `;
+                }
 
                 resultsContainer.appendChild(resultElement);
             });
@@ -529,8 +690,6 @@
 
             basketCounts[basketIndex]++;
             document.getElementById(`count-${basketIndex}`).textContent = basketCounts[basketIndex];
-
-            addResult(basketIndex);
         }
 
         Events.on(engine, 'collisionStart', (event) => {
@@ -550,6 +709,7 @@
 
                 if (ball && basket) {
                     animateBasket(basket.basketIndex);
+                    addResult(basket.basketIndex, ball);
 
                     World.remove(world, ball);
                     const ballIndex = balls.indexOf(ball);
@@ -560,8 +720,21 @@
             });
         });
 
-        document.getElementById('dropBall').addEventListener('click', createBall);
+        document.getElementById('ballCountSlider').addEventListener('input', (e) => {
+            document.getElementById('ballCountDisplay').textContent = e.target.value;
+        });
+
+        document.getElementById('dropBall').addEventListener('click', () => {
+            const numBalls = parseInt(document.getElementById('ballCountSlider').value);
+            if (numBalls === 1) {
+                createBall();
+            } else {
+                createBatch(numBalls);
+            }
+        });
+
         document.getElementById('clearResults').addEventListener('click', clearResults);
+        
         document.getElementById('advanced').addEventListener('change', (e) => {
             const stats = document.querySelectorAll('.basket-stat');
             stats.forEach((stat, index) => {
