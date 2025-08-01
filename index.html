@@ -342,29 +342,34 @@
         const engine = Engine.create();
         const world = engine.world;
 
-        // Sound management
+        // Enhanced sound management
         const sounds = {
             click: null,
-            score: null
+            score: null,
+            big_score: null,
+            small_score: null
         };
 
         let soundEnabled = true;
 
-        // Initialize sounds
         function initSounds() {
             try {
                 sounds.click = new Audio('click.wav');
-                sounds.score = new Audio('score.wav');
+                sounds.score = new Audio('score.mp3');
+                sounds.big_score = new Audio('big_score.mp3');
+                sounds.small_score = new Audio('small_score.mp3');
                 
-                // Set volume and preload
                 sounds.click.volume = 0.5;
                 sounds.score.volume = 0.7;
-                sounds.click.preload = 'auto';
-                sounds.score.preload = 'auto';
+                sounds.big_score.volume = 0.8;
+                sounds.small_score.volume = 0.6;
                 
-                // Handle loading errors gracefully
-                sounds.click.onerror = () => console.warn('Could not load click.wav');
-                sounds.score.onerror = () => console.warn('Could not load score.wav');
+                Object.values(sounds).forEach(sound => {
+                    if (sound) {
+                        sound.preload = 'auto';
+                        sound.onerror = () => console.warn(`Could not load ${sound.src}`);
+                    }
+                });
             } catch (error) {
                 console.warn('Audio initialization failed:', error);
             }
@@ -375,10 +380,22 @@
             
             try {
                 const sound = sounds[soundName];
-                sound.currentTime = 0; // Reset to beginning
+                sound.currentTime = 0;
                 sound.play().catch(e => console.warn(`Could not play ${soundName}:`, e));
             } catch (error) {
                 console.warn(`Error playing ${soundName}:`, error);
+            }
+        }
+
+        function getScoreSound(basketIndex) {
+            if (basketIndex === 0 || basketIndex === 8) {
+                return 'big_score';
+            }
+            else if (basketIndex === 4) {
+                return 'small_score';
+            }
+            else {
+                return 'score';
             }
         }
 
@@ -756,7 +773,6 @@
             event.pairs.forEach(pair => {
                 const { bodyA, bodyB } = pair;
 
-                // Check for ball hitting peg
                 let ball = null;
                 let peg = null;
                 
@@ -769,11 +785,9 @@
                 }
 
                 if (ball && peg) {
-                    // Play click sound when ball hits peg
                     playSound('click');
                 }
 
-                // Check for ball hitting basket
                 ball = null;
                 let basket = null;
 
@@ -789,8 +803,8 @@
                     animateBasket(basket.basketIndex);
                     addResult(basket.basketIndex, ball);
 
-                    // Play score sound when ball hits basket
-                    playSound('score');
+                    const scoreSound = getScoreSound(basket.basketIndex);
+                    playSound(scoreSound);
 
                     World.remove(world, ball);
                     const ballIndex = balls.indexOf(ball);
@@ -829,7 +843,6 @@
 
         window.addEventListener('resize', updateScale);
 
-        // Initialize everything
         initSounds();
         updateScale();
 
